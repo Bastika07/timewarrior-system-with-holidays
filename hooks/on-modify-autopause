@@ -1,0 +1,54 @@
+#!/usr/bin/env python3
+"""Auto-Pause Hook - Fügt 30min Pausen bei >4h Arbeitszeit ein"""
+
+import json
+import sys
+from datetime import datetime, timedelta
+
+def add_break_if_needed(intervals):
+    modified_intervals = []
+    
+    for interval in intervals:
+        if 'end' in interval and 'start' in interval:
+            start = datetime.fromisoformat(interval['start'].replace('Z', '+00:00'))
+            end = datetime.fromisoformat(interval['end'].replace('Z', '+00:00'))
+            duration = end - start
+            
+            # Bei >4h Arbeitszeit füge 30min Pause hinzu
+            if duration > timedelta(hours=4):
+                pause_start = start + duration / 2
+                pause_end = pause_start + timedelta(minutes=30)
+                
+                first_part = interval.copy()
+                first_part['end'] = pause_start.isoformat() + 'Z'
+                
+                second_part = interval.copy()
+                second_part['start'] = pause_end.isoformat() + 'Z'
+                
+                modified_intervals.extend([first_part, second_part])
+            else:
+                modified_intervals.append(interval)
+        else:
+            modified_intervals.append(interval)
+    
+    return modified_intervals
+
+def main():
+    try:
+        input_data = sys.stdin.read()
+        if not input_data.strip():
+            return
+            
+        data = json.loads(input_data)
+        
+        if isinstance(data, list):
+            modified_data = add_break_if_needed(data)
+            print(json.dumps(modified_data))
+        else:
+            print(json.dumps(data))
+            
+    except Exception:
+        print(input_data if 'input_data' in locals() else '[]')
+
+if __name__ == '__main__':
+    main()

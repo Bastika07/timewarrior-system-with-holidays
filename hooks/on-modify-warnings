@@ -1,0 +1,59 @@
+#!/usr/bin/env python3
+"""Warning Hook - 10h Grenze & 11h Ruhezeit Überwachung"""
+
+import json
+import sys
+import subprocess
+from datetime import datetime, timedelta
+
+def notify_user(message, urgent=False):
+    try:
+        subprocess.run(['notify-send', 
+                       'Timewarrior Warning' if urgent else 'Timewarrior Info', 
+                       message,
+                       '-u', 'critical' if urgent else 'normal'], 
+                      check=False)
+    except:
+        print(f"\n{'='*50}")
+        print(f"TIMEWARRIOR {'WARNING' if urgent else 'INFO'}: {message}")
+        print(f"{'='*50}\n")
+
+def get_daily_hours(date_str):
+    try:
+        result = subprocess.run(['timew', 'summary', date_str, ':ids'], 
+                              capture_output=True, text=True)
+        if result.returncode == 0:
+            lines = result.stdout.strip().split('\n')
+            for line in lines:
+                if 'Total' in line:
+                    parts = line.split()
+                    for part in parts:
+                        if 'h' in part and part.replace('h', '').replace('.', '').isdigit():
+                            return float(part.replace('h', ''))
+        return 0.0
+    except:
+        return 0.0
+
+def main():
+    try:
+        input_data = sys.stdin.read()
+        if not input_data.strip():
+            return
+            
+        data = json.loads(input_data)
+        
+        today = datetime.now().strftime('%Y-%m-%d')
+        daily_hours = get_daily_hours(today)
+        
+        if daily_hours >= 10.0:
+            notify_user(f"Arbeitszeit heute: {daily_hours:.1f}h - 10h-Grenze erreicht!", urgent=True)
+        elif daily_hours >= 8.5:
+            notify_user(f"Arbeitszeit heute: {daily_hours:.1f}h - Bald 10h-Grenze erreicht!")
+            
+        print(json.dumps(data))
+        
+    except:
+        print(input_data if 'input_data' in locals() else '[]')
+
+if __name__ == '__main__':
+    main()

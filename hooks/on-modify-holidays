@@ -1,0 +1,94 @@
+#!/usr/bin/env python3
+"""Holiday Hook - Erkennt Feiertage (auch regionale) und passt Erwartungen an"""
+
+import json
+import sys
+import os
+from datetime import datetime, date
+import subprocess
+
+def load_holidays():
+    """Lade Feiertage aus lokaler Datei"""
+    holidays_file = os.path.expanduser('~/.timewarrior/data/holidays/holidays.json')
+    try:
+        with open(holidays_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return {}
+
+def load_state_config():
+    """Lade Bundesland-Konfiguration"""
+    config_file = os.path.expanduser('~/.timewarrior/data/config/regional.json')
+    try:
+        with open(config_file, 'r', encoding='utf-8') as f:
+            return json.load(f)
+    except:
+        return None
+
+def is_holiday(check_date):
+    """Prüfe ob gegebenes Datum ein Feiertag ist"""
+    holidays = load_holidays()
+    date_str = check_date.strftime('%Y-%m-%d')
+    return holidays.get(date_str, None)
+
+def is_vacation(check_date):
+    """Prüfe ob gegebenes Datum ein Urlaubstag ist"""
+    vacation_file = os.path.expanduser('~/.timewarrior/data/vacation/vacation.json')
+    try:
+        with open(vacation_file, 'r', encoding='utf-8') as f:
+            vacations = json.load(f)
+            date_str = check_date.strftime('%Y-%m-%d')
+            for vacation in vacations:
+                if vacation['start'] <= date_str <= vacation['end']:
+                    return vacation['name']
+    except:
+        pass
+    return None
+
+def notify_user(message, urgent=False):
+    """Benachrichtige User"""
+    try:
+        subprocess.run(['notify-send', 
+                       'Timewarrior Holiday/Vacation' if urgent else 'Timewarrior Info', 
+                       message,
+                       '-u', 'critical' if urgent else 'normal'], 
+                      check=False)
+    except:
+        print(f"\n{'='*50}")
+        print(f"TIMEWARRIOR INFO: {message}")
+        print(f"{'='*50}\n")
+
+def main():
+    try:
+        input_data = sys.stdin.read()
+        if not input_data.strip():
+            return
+            
+        data = json.loads(input_data)
+        
+        # Prüfe heutiges Datum
+        today = datetime.now().date()
+        config = load_state_config()
+        
+        # Ist heute ein Feiertag?
+        holiday_name = is_holiday(today)
+        if holiday_name:
+            regional_info = ""
+            if config and any(x in holiday_name for x in ["Heilige Drei Könige", "Fronleichnam", "Mariä Himmelfahrt", "Reformationstag", "Allerheiligen", "Buß- und Bettag", "Frauentag", "regional"]):
+                regional_info = f" ({config['state_name']})"
+            
+            notify_user(f"Heute ist {holiday_name}{regional_info} - Feiertag erkannt!")
+        
+        # Ist heute Urlaub?
+        vacation_name = is_vacation(today)
+        if vacation_name:
+            notify_user(f"Heute ist Urlaub: {vacation_name}")
+        
+        # Gebe Original-Daten zurück
+        print(json.dumps(data))
+        
+    except Exception as e:
+        print(input_data if 'input_data' in locals() else '[]')
+
+if __name__ == '__main__':
+    main()
